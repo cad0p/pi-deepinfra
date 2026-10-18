@@ -42,7 +42,7 @@ Requires [pi](https://github.com/earendil-works/pi).
 
 | Feature | Notes |
 |---|---|
-| **Model catalog** | Registered instantly with a curated fallback list — startup never blocks on the network. The live catalog from `https://api.deepinfra.com/v1/openai/models` is fetched lazily at session start and swapped in over the fallback — **no API key required** (the catalog is public), so models are ready the moment a key is added. All `chat`-tagged models are registered (embeddings/image/TTS/STT excluded). |
+| **Model catalog** | Registered instantly with a curated fallback list — startup never blocks on the network. The live catalog from `https://api.deepinfra.com/v1/openai/models` is fetched lazily at session start, swapped in over the fallback, and cached in `~/.pi/agent/cache/deepinfra-models.json` so later startups register the full catalog instantly (needed by clients that select a model right after launching pi, e.g. RPC mode) — **no API key required** (the catalog is public), so models are ready the moment a key is added. All `chat`-tagged models are registered (embeddings/image/TTS/STT excluded). |
 | **Streaming** | `openai-completions` API; SSE streaming with `reasoning_content` thinking deltas on reasoning models. |
 | **Thinking levels** | `reasoning_effort` maps 1:1 to pi thinking levels (`minimal`…`max`); `off` → `none`. E.g. `Ctrl+P` or `/model` + thinking level cycling works as usual. |
 | **Vision** | `vision`-tagged models accept image input. |

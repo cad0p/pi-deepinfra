@@ -7,7 +7,11 @@
  * and capability tags (chat / reasoning / vision / prompt_cache).
  */
 
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
 import type { Model, ModelThinkingLevel, ThinkingLevelMap } from "@earendil-works/pi-ai";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export const PROVIDER_ID = "deepinfra";
 export const BASE_URL = "https://api.deepinfra.com/v1/openai";
@@ -108,14 +112,56 @@ export async function fetchDeepInfraModels(signal?: AbortSignal): Promise<Model<
 		throw new Error(`catalog fetch failed: HTTP ${response.status}`);
 	}
 	const catalog = (await response.json()) as DeepInfraCatalog;
-	return catalog.data
-		.filter((m) => m.metadata?.tags?.includes(CHAT_TAG))
-		.map(mapCatalogModel);
+	const chat = catalog.data.filter((m) => m.metadata?.tags?.includes(CHAT_TAG));
+	writeCatalogCache(chat);
+	return chat.map(mapCatalogModel);
 }
 
 /**
- * Curated fallback list used when the live catalog cannot be fetched at
- * startup (offline, DNS, etc.). Values captured from the live catalog.
+ * On-disk copy of the last successfully fetched catalog
+ * (~/.pi/agent/cache/deepinfra-models.json). Read synchronously at extension
+ * load so models seen on a previous run resolve immediately — clients that
+ * select a model right after spawning pi (e.g. `pi --mode rpc` + `set_model`,
+ * or `enabledModels` patterns in settings.json) would otherwise race the lazy
+ * catalog fetch and get "Model not found". Raw catalog entries are stored so
+ * mapping changes apply without invalidating the cache.
+ */
+export const CATALOG_CACHE_PATH = join(getAgentDir(), "cache", "deepinfra-models.json");
+
+interface CatalogCacheFile {
+	fetchedAt: number;
+	data: DeepInfraCatalogModel[];
+}
+
+/** Cached catalog models, or undefined when no usable cache exists. Never throws. */
+export function readCachedModels(): Model<"openai-completions">[] | undefined {
+	try {
+		const cache = JSON.parse(readFileSync(CATALOG_CACHE_PATH, "utf8")) as CatalogCacheFile;
+		if (!Array.isArray(cache.data) || cache.data.length === 0) return undefined;
+		return cache.data.map(mapCatalogModel);
+	} catch {
+		return undefined;
+	}
+}
+
+/** Best-effort atomic write; a failed cache write must never fail the fetch. */
+function writeCatalogCache(data: DeepInfraCatalogModel[]): void {
+	if (data.length === 0) return;
+	try {
+		mkdirSync(dirname(CATALOG_CACHE_PATH), { recursive: true });
+		const tmp = `${CATALOG_CACHE_PATH}.${process.pid}.tmp`;
+		const file: CatalogCacheFile = { fetchedAt: Date.now(), data };
+		writeFileSync(tmp, JSON.stringify(file));
+		renameSync(tmp, CATALOG_CACHE_PATH);
+	} catch {
+		// ignore: next successful fetch retries
+	}
+}
+
+/**
+ * Curated fallback list used before the first successful catalog fetch (no
+ * cache yet) and when the catalog is unreachable (offline, DNS, etc.).
+ * Values captured from the live catalog.
  */
 export function fallbackModels(): Model<"openai-completions">[] {
 	const entries: Array<[string, number, number, number, number, boolean, boolean]> = [
