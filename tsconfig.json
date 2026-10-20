@@ -13,5 +13,5 @@
   // pi imports (@earendil-works/pi-*) resolve at runtime via pi's extension
   // loader, and this package carries no pi dev-dependency by design. Only the
   // framework-free module (thinking.ts) and its test are typechecked here.
-  "include": ["thinking.ts", "thinking.test.ts", "pricing.ts", "pricing.test.ts"]
+  "include": ["thinking.ts", "thinking.test.ts", "pricing.ts", "pricing.test.ts", "packaging.test.ts"]
 }

@@ -21,6 +21,7 @@
     "index.ts",
     "models.ts",
     "thinking.ts",
+    "pricing.ts",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
