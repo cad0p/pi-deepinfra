@@ -1,69 +1,40 @@
-# Publishes pi-deepinfra to the npm registry using npm trusted publishing (OIDC).
-#
-# Requirements (already configured on npmjs.com for puetsua/pi-deepinfra):
-#   - Trusted Publisher: repo puetsua/pi-deepinfra, workflow "release.yml",
-#     environment "npm"
-#   - This workflow file MUST stay named .github/workflows/release.yml
-#   - Public repository + public package (provenance attestations are
-#     generated automatically by trusted publishing)
-#
-# No NODE_AUTH_TOKEN is used: the npm CLI exchanges the GitHub OIDC token for a
-# short-lived publish token when id-token: write is set. Trusted publishing
-# requires npm >= 11.5.1 and Node >= 22.14.
-#
-# Triggers:
-#   - Publishing a GitHub Release (tag vX.Y.Z) -> auto-publish
-#   - workflow_dispatch -> manual republish from the Actions tab
+name: Auto Release
 
-name: Publish to npm
-
+# Cuts a calver prerelease (vX.Y.Z-YYYYMMDD.N) on every push to main and
+# publishes it to npm under the `next` tag; `latest` only moves through a
+# curated base release (release/from-vX.Y.Z). `workflow_dispatch` is the
+# manual retrigger — a workflow added by an API-created squash merge may not
+# fire on that same push.
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main, 'release/*']
   workflow_dispatch:
 
 permissions:
-  id-token: write # required for OIDC trusted publishing
-  contents: read
+  contents: write
+  pull-requests: write
+  id-token: write
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
-    # Must match the environment configured in the npm Trusted Publisher
-    # (env: npm), otherwise the OIDC environment claim does not match.
-    environment: npm
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      has_changes: ${{ steps.release.outputs.has_changes }}
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
+      - id: release
+        uses: cad0p/semver-calver-release/release@v1
         with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-          package-manager-cache: false
+          skip_release: ${{ github.ref != 'refs/heads/main' }}
 
-      # Trusted publishing needs npm >= 11.5.1
-      - name: Ensure recent npm
-        run: npm install -g npm@latest
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Version safety: the release tag must match package.json version.
-      # Tags use <major>.<minor>.<patch> without a "v" prefix (see .npmrc).
-      - name: Verify version matches release tag
-        if: github.event_name == 'release'
-        run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          echo "release tag: ${GITHUB_REF_NAME} (normalized: ${TAG_VERSION})"
-          echo "package.json version: ${PKG_VERSION}"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Release tag ${TAG_VERSION} does not match package.json version ${PKG_VERSION}"
-            exit 1
-          fi
-
-      - name: Sanity-check package contents
-        run: npm pack --dry-run
-
-      - name: Publish to npm (trusted publishing / OIDC)
-        run: npm publish --provenance --access public
+  publish:
+    needs: release
+    if: github.ref == 'refs/heads/main' && needs.release.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: cad0p/semver-calver-release/npm-publish@v1
+        with:
+          tag: v${{ needs.release.outputs.version }}
