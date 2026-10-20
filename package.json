@@ -28,11 +28,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cad0p/pi-deepinfra.git"
+    "url": "git+https://github.com/cad0p/pi-deepinfra-provider.git"
   },
-  "homepage": "https://github.com/cad0p/pi-deepinfra#readme",
+  "homepage": "https://github.com/cad0p/pi-deepinfra-provider#readme",
   "bugs": {
-    "url": "https://github.com/cad0p/pi-deepinfra/issues"
+    "url": "https://github.com/cad0p/pi-deepinfra-provider/issues"
   },
   "engines": {
     "node": ">=22.19.0"

@@ -19,7 +19,7 @@ pi install npm:@cad0p/pi-deepinfra-provider@next
 or from source:
 
 ```bash
-pi install git:github.com/cad0p/pi-deepinfra
+pi install git:github.com/cad0p/pi-deepinfra-provider
 ```
 
 1. Authenticate — either:
