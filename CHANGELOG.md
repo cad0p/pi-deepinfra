@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 - Service tiers (flex/priority) + cost that matches the invoice (closes #14)
 - One model entry per service tier (closes #18)
+- Inherit base-id modelOverrides into the tier variants (closes #20)
 
 ### 🐛 Bug Fixes
 
