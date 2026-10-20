@@ -12,22 +12,20 @@
  * - API key auth reading pi's credential store (~/.pi/agent/auth.json →
  *   `deepinfra` api_key entry) with DEEPINFRA_API_KEY env fallback; `/login deepinfra`
  *   prompts and stores the key.
- * - A footer statusline showing DeepInfra MONTHLY usage (with the configured
- *   spending limit when set) via /payment/usage and /payment/config. Session
- *   tokens + cost are NOT repeated here — pi's own footer already shows them.
- *   `PI_DEEPINFRA_FOOTER=off` suppresses the statusline.
+ *
+ * No statusline: pi's own footer already renders session tokens + cost, and the
+ * DeepInfra monthly spend lives on the dashboard — so the extension adds no
+ * second footer and makes no /payment calls.
  *
  * Usage:
  *   pi -e .                       # run with the extension
  *   /login deepinfra              # interactive API key entry (or set DEEPINFRA_API_KEY)
  *   /model deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731
- *   /deepinfra-billing            # refresh monthly usage in the footer
  */
 
 import { createProvider, openAICompletionsApi, type ApiKeyAuth, type Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import { createUsageFooter } from "./billing";
 import { BASE_URL, fetchDeepInfraModels, fallbackModels, PROVIDER_ID, readCachedModels } from "./models";
 
 const deepInfraApiKeyAuth: ApiKeyAuth = {
@@ -94,31 +92,8 @@ export default function (pi: ExtensionAPI): void {
 		}
 	};
 
-	// 3. Footer statusline: DeepInfra monthly spend only (pi's footer already
-	//    shows session tokens + cost).
-	const footer = createUsageFooter(pi, PROVIDER_ID);
-
+	// 3. Swap the catalog in at session start (fire-and-forget, never awaited).
 	pi.on("session_start", (_event, ctx) => {
 		void refreshCatalog(ctx.signal);
-		void footer.onSessionStart(ctx);
-	});
-	pi.on("model_select", (_event, ctx) => {
-		footer.onModelSelect(ctx);
-	});
-	pi.on("session_shutdown", () => {
-		footer.onShutdown();
-	});
-
-	pi.registerCommand("deepinfra-billing", {
-		description: "Refresh DeepInfra monthly usage shown in the footer",
-		handler: async (_args, ctx) => {
-			await footer.refreshMonthly(ctx);
-			ctx.ui.notify(
-				ctx.model?.provider === PROVIDER_ID
-					? "DeepInfra monthly usage refreshed"
-					: "DeepInfra monthly usage refreshed (not active model)",
-				"info",
-			);
-		},
 	});
 }
