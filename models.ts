@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
+import { applyOverride, type ModelOverride, parseModelsJson, pickOverrides } from "./overrides";
 import { effectiveRates, type ServiceTier } from "./pricing";
 import { tierModelId, tierModelName, tiersFor, TIERS } from "./tiers";
 // Complete reasoning_effort map — see ./thinking.ts (xhigh/max are opt-in in
@@ -61,6 +62,19 @@ export interface DeepInfraCatalog {
  * `usage.estimated_cost`, so each entry has to carry its own tier-adjusted
  * rates (see ./pricing.ts).
  */
+/**
+ * models.json `modelOverrides` for this provider. Read once per catalog build.
+ * pi applies the VARIANT's own override afterwards; this map is what makes the
+ * BASE id's override reach its tier variants (see ./overrides.ts).
+ */
+function readModelOverrides(): Record<string, ModelOverride> {
+	try {
+		return pickOverrides(parseModelsJson(readFileSync(join(getAgentDir(), "models.json"), "utf8")), PROVIDER_ID);
+	} catch {
+		return {};
+	}
+}
+
 /** "deepseek-ai/DeepSeek-V4-Flash-0731" -> "DeepSeek-V4-Flash-0731" */
 export function displayName(id: string): string {
 	const tail = id.split("/").pop() ?? id;
@@ -86,6 +100,7 @@ export const DEEPINFRA_COMPAT = {
 export function mapCatalogModelTier(
 	raw: DeepInfraCatalogModel,
 	tier: ServiceTier,
+	overrides: Record<string, ModelOverride> = {},
 ): Model<"openai-completions"> {
 	const metadata = raw.metadata ?? {};
 	const tags = metadata.tags ?? [];
@@ -105,7 +120,7 @@ export function mapCatalogModelTier(
 		tier,
 	);
 
-	return {
+	const model: Model<"openai-completions"> = {
 		id: tierModelId(raw.id, tier),
 		name: tierModelName(baseName, tier),
 		api: "openai-completions",
@@ -121,11 +136,16 @@ export function mapCatalogModelTier(
 		// The tier travels with the model entry; default sends nothing.
 		samplingParams: tier === "default" ? undefined : { service_tier: tier },
 	};
+	// Inherit the base id's override; pi layers the variant's own one on top.
+	return tier === "default" ? model : applyOverride(model, overrides[raw.id]);
 }
 
 /** One catalog entry -> its default/flex/priority entries. */
-export function mapCatalogModel(raw: DeepInfraCatalogModel): Model<"openai-completions">[] {
-	return tiersFor(raw.id).map((tier) => mapCatalogModelTier(raw, tier));
+export function mapCatalogModel(
+	raw: DeepInfraCatalogModel,
+	overrides: Record<string, ModelOverride> = {},
+): Model<"openai-completions">[] {
+	return tiersFor(raw.id).map((tier) => mapCatalogModelTier(raw, tier, overrides));
 }
 
 /**
@@ -146,7 +166,8 @@ export async function fetchDeepInfraModels(signal?: AbortSignal): Promise<Model<
 	const catalog = (await response.json()) as DeepInfraCatalog;
 	const chat = catalog.data.filter((m) => m.metadata?.tags?.includes(CHAT_TAG));
 	writeCatalogCache(chat);
-	return chat.flatMap(mapCatalogModel);
+	const overrides = readModelOverrides();
+	return chat.flatMap((raw) => mapCatalogModel(raw, overrides));
 }
 
 /**
@@ -170,7 +191,8 @@ export function readCachedModels(): Model<"openai-completions">[] | undefined {
 	try {
 		const cache = JSON.parse(readFileSync(CATALOG_CACHE_PATH, "utf8")) as CatalogCacheFile;
 		if (!Array.isArray(cache.data) || cache.data.length === 0) return undefined;
-		return cache.data.flatMap(mapCatalogModel);
+		const overrides = readModelOverrides();
+		return cache.data.flatMap((raw) => mapCatalogModel(raw, overrides));
 	} catch {
 		return undefined;
 	}
