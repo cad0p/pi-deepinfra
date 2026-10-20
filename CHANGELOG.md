@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [calver-released]
+
+<!-- USER-EDITABLE SECTION START -->
+<!-- Add your curated release notes here. -->
+<!-- USER-EDITABLE SECTION END -->
+
+### 🚀 Features
+
+- Service tiers (flex/priority) + cost that matches the invoice (closes #14)
+- One model entry per service tier (closes #18)
+- Inherit base-id modelOverrides into the tier variants (closes #20)
+
+### 🐛 Bug Fixes
+
+- Ship pricing.ts, and fail CI when a module is not packaged (closes #16)
+- Send the catalog id on the wire for tier variants (closes #21)
+
+### ⚙️ Miscellaneous Tasks
+
+- Rename the npm package to @cad0p/pi-deepinfra-provider (closes #9)
+- Drop the billing footer and /deepinfra-billing (closes #7)
+- Point the manifest and README at the renamed repo (closes #12)
+
+
 ## [0.1.5] - 2026-10-20
 
 <!-- USER-EDITABLE SECTION START -->
