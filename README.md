@@ -48,7 +48,7 @@ pi install git:github.com/cad0p/pi-deepinfra-provider
 | **Vision** | `vision`-tagged models accept image input. |
 | **Tool calling** | Standard OpenAI `tools`/`tool_choice`. |
 | **Cost tracking** | The rates published to pi are what DeepInfra actually bills: catalog **list** prices x the published `discount` x the service-tier multiplier ($ per 1M tokens). Upstream maps list prices only, which overstates the footer by ~2x (or ~2.55x on flex). Verified against the API's `usage.estimated_cost`. |
-| **Service tiers as models** | Every catalog model gets three entries, so you pick the tier by picking a model (works with `/model`, scoped models, subagents, fallback chains — and lets two tiers of the same model coexist): `deepinfra/<id>` = default 1x, `deepinfra/<id>-flex` = flex 0.8x (non-production), `deepinfra/<id>-priority` = priority 1.5x. The tier is sent as the `service_tier` body parameter and each entry carries its own tier-adjusted rates, so pi's cost is the billed cost. |
+| **Service tiers as models** | Every catalog model gets three entries, so you pick the tier by picking a model (works with `/model`, scoped models, subagents, fallback chains — and lets two tiers of the same model coexist): `deepinfra/<id>` = default 1x, `deepinfra/<id>-flex` = flex 0.8x (non-production), `deepinfra/<id>-priority` = priority 1.5x. The tier is sent as the `service_tier` body parameter, and the request's `model` is rewritten back to the catalog id (pi sends `model.id`, so a suffixed id would be a `404 model_not_found` at DeepInfra); each entry carries its own tier-adjusted rates, so pi's cost is the billed cost. |
 | **No statusline** | The fork adds no footer of its own: pi already renders session tokens + cost, and the DeepInfra monthly spend lives on the dashboard. The extension makes no `/payment` calls. |
 
 ## Configuration
@@ -95,7 +95,7 @@ pi install git:github.com/cad0p/pi-deepinfra-provider
    `/payment/*` calls with it.
 
 3. **Real costs.** Upstream maps catalog list prices straight into `model.cost`, ignoring the catalog's `discount` field, so pi's footer shows ~2x the real charge; the fork folds in the discount and the service tier (see `pricing.ts`).
-4. **Service tiers are models.** Upstream never sends `service_tier`, so every request runs standard. The fork registers `<id>`, `<id>-flex` and `<id>-priority` (see `tiers.ts`), each with its own `samplingParams` and rates.
+4. **Service tiers are models.** Upstream never sends `service_tier`, so every request runs standard. The fork registers `<id>`, `<id>-flex` and `<id>-priority` (see `tiers.ts`), each with its own `samplingParams` and rates; the wire id stays the catalog id (see `wire.ts`), since DeepInfra rejects the suffixed siblings.
 
 Everything else — catalog discovery, caching, auth, compat flags — is upstream's.
 

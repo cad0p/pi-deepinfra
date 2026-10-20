@@ -16,6 +16,8 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { applyOverride, type ModelOverride, parseModelsJson, pickOverrides } from "./overrides";
 import { effectiveRates, type ServiceTier } from "./pricing";
 import { tierModelId, tierModelName, tiersFor, TIERS } from "./tiers";
+// The tier lives on the model entry, but the wire id must stay the catalog id.
+import { tierWireParams } from "./wire";
 // Complete reasoning_effort map — see ./thinking.ts (xhigh/max are opt-in in
 // pi, so an incomplete map silently caps the selector at "high").
 import { THINKING_LEVEL_MAP } from "./thinking";
@@ -133,8 +135,10 @@ export function mapCatalogModelTier(
 		contextWindow: metadata.context_length ?? 128_000,
 		maxTokens: metadata.max_tokens ?? 4096,
 		compat: DEEPINFRA_COMPAT,
-		// The tier travels with the model entry; default sends nothing.
-		samplingParams: tier === "default" ? undefined : { service_tier: tier },
+		// The tier travels with the model entry; default sends nothing. pi assigns
+		// samplingParams last, so this also rewrites the request's `model` back to
+		// the catalog id (a suffixed id is a 404 at DeepInfra) — see ./wire.ts.
+		samplingParams: tierWireParams(raw.id, tier),
 	};
 	// Inherit the base id's override; pi layers the variant's own one on top.
 	return tier === "default" ? model : applyOverride(model, overrides[raw.id]);
@@ -247,7 +251,7 @@ export function fallbackModels(): Model<"openai-completions">[] {
 			contextWindow,
 			maxTokens,
 			compat: DEEPINFRA_COMPAT,
-			samplingParams: tier === "default" ? undefined : { service_tier: tier },
+			samplingParams: tierWireParams(id, tier),
 		})),
 	);
 }
