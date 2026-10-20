@@ -48,17 +48,11 @@ pi install git:github.com/cad0p/pi-deepinfra
 | **Vision** | `vision`-tagged models accept image input. |
 | **Tool calling** | Standard OpenAI `tools`/`tool_choice`. |
 | **Cost tracking** | Input/output/cache prices from the catalog ($ per 1M tokens, `cache_read_tokens` when DeepInfra publishes it). Override per model in `~/.pi/agent/models.json` if needed. Session tokens + cost are rendered by pi's own footer. |
-| **Footer statusline** | While a DeepInfra model is active: `M: $12.34 / $50.00` — the DeepInfra monthly spend and the configured spending limit (via `/payment/config`), or `M: $12.34` when no limit is set. Nothing else: pi's footer already shows session tokens and cost, so this extension does not repeat them. Refresh with `/deepinfra-billing`; disable with `PI_DEEPINFRA_FOOTER=off`. |
-
-## Commands
-
-- `/deepinfra-billing` — refresh the monthly-usage figure in the footer
-  (also refreshed on session start / model select; no background polling).
+| **No statusline** | The fork adds no footer of its own: pi already renders session tokens + cost, and the DeepInfra monthly spend lives on the dashboard. The extension makes no `/payment` calls. |
 
 ## Configuration
 
 - **API key**: `/login deepinfra`, `DEEPINFRA_API_KEY`, or the auth.json credential.
-- **Footer**: `PI_DEEPINFRA_FOOTER=off` hides the statusline entirely.
 - **Per-model overrides** (prices, context, max tokens, thinking levels): standard
   pi `~/.pi/agent/models.json` mechanism, e.g.:
 
@@ -87,11 +81,11 @@ pi install git:github.com/cad0p/pi-deepinfra
    request is silently clamped to `high`. Verified against the live API: the
    validator accepts `none/minimal/low/medium/high/xhigh/max` for every chat
    model, so the map is complete.
-2. **The footer no longer duplicates pi's.** Upstream renders
-   `↑in ↓out · $cost · M: $spent`; pi's own footer already renders
-   `↑in ↓out $cost`, so the fork keeps only the monthly figure and drops the
-   per-message recomputation.
-3. **`PI_DEEPINFRA_FOOTER=off`** to hide the statusline (upstream has no switch).
+2. **No footer at all.** Upstream renders `↑in ↓out · $cost · M: $spent` while
+   pi's own footer already renders `↑in ↓out $cost`; the monthly figure is on
+   the DeepInfra dashboard. The fork drops the statusline, the
+   `/deepinfra-billing` command, the per-message recomputation, and the
+   `/payment/*` calls with it.
 
 Everything else — catalog discovery, caching, auth, compat flags — is upstream's.
 

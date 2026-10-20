@@ -43,7 +43,7 @@ pnpm check   # tsc --noEmit (thinking.ts + thinking.test.ts)
 pnpm test    # node --test --experimental-strip-types '*.test.ts'
 ```
 
-`index.ts`, `models.ts` and `billing.ts` are excluded from `tsc` on purpose: their
+`index.ts` and `models.ts` are excluded from `tsc` on purpose: their
 `@earendil-works/pi-*` imports resolve through pi's extension loader at runtime
 and this package carries no pi dev-dependency (same policy as
 `cad0p/pi-fallback-provider`).
@@ -54,7 +54,7 @@ and this package carries no pi dev-dependency (same policy as
 |---|---|
 | Thinking levels / `thinkingLevelMap` | Load the extension in a real pi session with a DeepInfra model selected and confirm the selector reaches `max` (and that `/model` cycling offers it). Independent check: `getSupportedThinkingLevels()` from the installed `@earendil-works/pi-ai` returns the full list for the resolved model. |
 | Provider/compat flags | One real streaming request through the extension (`pi -e . --provider deepinfra --model <id>`) with the target model; confirm text + `reasoning_content` deltas arrive. |
-| Footer / billing | Real session on a DeepInfra model: the statusline shows only `M: $x.xx`, and `PI_DEEPINFRA_FOOTER=off` removes it. |
+| Footer / billing | Real session on a DeepInfra model: **no** DeepInfra statusline appears (pi's own footer is the only one), and no request is made to `api.deepinfra.com/payment/*`. |
 | Catalog / startup | Start pi with the network blocked (or a stale cache) and confirm the provider still registers models and a session runs. |
 
 ## 5. What "green" means
