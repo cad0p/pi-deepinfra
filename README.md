@@ -1,4 +1,4 @@
-# pi-deepinfra (cad0p fork)
+# @cad0p/pi-deepinfra-provider
 
 A [pi](https://github.com/earendil-works/pi) extension that adds the **DeepInfra**
 provider: 90+ hosted chat models (DeepSeek, Qwen, Llama, Gemma, Mistral, plus hosted
@@ -13,7 +13,7 @@ Fork of [puetsua/pi-deepinfra](https://github.com/puetsua/pi-deepinfra) — see
 Requires [pi](https://github.com/earendil-works/pi).
 
 ```bash
-pi install npm:@cad0p/pi-deepinfra@next
+pi install npm:@cad0p/pi-deepinfra-provider@next
 ```
 
 or from source:

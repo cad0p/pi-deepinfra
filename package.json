@@ -1,7 +1,7 @@
 {
-  "name": "@cad0p/pi-deepinfra",
+  "name": "@cad0p/pi-deepinfra-provider",
   "version": "0.1.5",
-  "description": "DeepInfra provider for pi: dynamic model catalog, full reasoning-effort thinking levels, vision, monthly billing footer (fork of pi-deepinfra)",
+  "description": "DeepInfra provider for pi: dynamic model catalog, full reasoning-effort thinking levels (max included), vision, monthly billing footer (fork of pi-deepinfra)",
   "type": "module",
   "license": "MIT",
   "author": "puetsua",
