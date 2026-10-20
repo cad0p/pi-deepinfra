@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug Fixes
 
 - Ship pricing.ts, and fail CI when a module is not packaged (closes #16)
+- Send the catalog id on the wire for tier variants (closes #21)
 
 ### ⚙️ Miscellaneous Tasks
 
