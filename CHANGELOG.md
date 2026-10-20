@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 - Service tiers (flex/priority) + cost that matches the invoice (closes #14)
 
+### 🐛 Bug Fixes
+
+- Ship pricing.ts, and fail CI when a module is not packaged (closes #16)
+
 ### ⚙️ Miscellaneous Tasks
 
 - Rename the npm package to @cad0p/pi-deepinfra-provider (closes #9)
