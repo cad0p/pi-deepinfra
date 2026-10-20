@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### 🚀 Features
 
 - Service tiers (flex/priority) + cost that matches the invoice (closes #14)
+- One model entry per service tier (closes #18)
 
 ### 🐛 Bug Fixes
 
