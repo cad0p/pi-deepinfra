@@ -24,6 +24,7 @@
     "overrides.ts",
     "pricing.ts",
     "tiers.ts",
+    "wire.ts",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
