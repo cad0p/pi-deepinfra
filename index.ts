@@ -12,9 +12,10 @@
  * - API key auth reading pi's credential store (~/.pi/agent/auth.json →
  *   `deepinfra` api_key entry) with DEEPINFRA_API_KEY env fallback; `/login deepinfra`
  *   prompts and stores the key.
- * - A footer statusline showing session input/output tokens + cost, and DeepInfra
- *   monthly usage (with the configured spending limit when set) via
- *   /payment/usage and /payment/config.
+ * - A footer statusline showing DeepInfra MONTHLY usage (with the configured
+ *   spending limit when set) via /payment/usage and /payment/config. Session
+ *   tokens + cost are NOT repeated here — pi's own footer already shows them.
+ *   `PI_DEEPINFRA_FOOTER=off` suppresses the statusline.
  *
  * Usage:
  *   pi -e .                       # run with the extension
@@ -24,7 +25,7 @@
  */
 
 import { createProvider, openAICompletionsApi, type ApiKeyAuth, type Model } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, MessageEndEvent } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 import { createUsageFooter } from "./billing";
 import { BASE_URL, fetchDeepInfraModels, fallbackModels, PROVIDER_ID, readCachedModels } from "./models";
@@ -93,18 +94,13 @@ export default function (pi: ExtensionAPI): void {
 		}
 	};
 
-	// 3. Footer statusline: session usage + monthly billing.
+	// 3. Footer statusline: DeepInfra monthly spend only (pi's footer already
+	//    shows session tokens + cost).
 	const footer = createUsageFooter(pi, PROVIDER_ID);
 
 	pi.on("session_start", (_event, ctx) => {
 		void refreshCatalog(ctx.signal);
 		void footer.onSessionStart(ctx);
-	});
-	pi.on("message_end", (event: MessageEndEvent, ctx) => {
-		footer.onMessageEnd(event, ctx);
-	});
-	pi.on("session_compact", (_event, ctx) => {
-		footer.onSessionCompact(ctx);
 	});
 	pi.on("model_select", (_event, ctx) => {
 		footer.onModelSelect(ctx);

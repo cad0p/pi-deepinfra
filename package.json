@@ -1,10 +1,13 @@
 {
-  "name": "pi-deepinfra",
-  "version": "0.1.4",
-  "description": "DeepInfra provider for pi: dynamic model catalog, reasoning-effort thinking levels, vision, session usage + monthly billing footer",
+  "name": "@cad0p/pi-deepinfra",
+  "version": "0.1.5",
+  "description": "DeepInfra provider for pi: dynamic model catalog, full reasoning-effort thinking levels, vision, monthly billing footer (fork of pi-deepinfra)",
   "type": "module",
   "license": "MIT",
   "author": "puetsua",
+  "contributors": [
+    "Pier Carlo Cadoppi <dev@pcad.it> (https://github.com/cad0p)"
+  ],
   "keywords": [
     "pi-package",
     "pi",
@@ -17,23 +20,34 @@
   "files": [
     "index.ts",
     "models.ts",
+    "thinking.ts",
     "billing.ts",
     "README.md",
-    "LICENSE"
+    "CHANGELOG.md",
+    "LICENSE",
+    "docs/verification.md"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/puetsua/pi-deepinfra.git"
+    "url": "git+https://github.com/cad0p/pi-deepinfra.git"
   },
-  "homepage": "https://github.com/puetsua/pi-deepinfra#readme",
+  "homepage": "https://github.com/cad0p/pi-deepinfra#readme",
   "bugs": {
-    "url": "https://github.com/puetsua/pi-deepinfra/issues"
+    "url": "https://github.com/cad0p/pi-deepinfra/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.19.0"
   },
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "test": "node --test --experimental-strip-types '*.test.ts'",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.0",
+    "typescript": "5.9.3"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

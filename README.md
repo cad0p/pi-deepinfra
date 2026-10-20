@@ -1,26 +1,26 @@
-# pi-deepinfra
+# pi-deepinfra (cad0p fork)
 
 A [pi](https://github.com/earendil-works/pi) extension that adds the **DeepInfra**
 provider: 90+ hosted chat models (DeepSeek, Qwen, Llama, Gemma, Mistral, plus hosted
 frontier models like Claude and Gemini), with dynamic model discovery, reasoning-effort
-control, vision, and a footer statusline showing session token usage + cost and
-DeepInfra monthly usage.
+control, vision, and a footer statusline showing DeepInfra **monthly** usage.
+
+Fork of [puetsua/pi-deepinfra](https://github.com/puetsua/pi-deepinfra) — see
+[Differences from upstream](#differences-from-upstream).
 
 ## Install
 
 Requires [pi](https://github.com/earendil-works/pi).
 
-- **npm** (recommended):
+```bash
+pi install npm:@cad0p/pi-deepinfra@next
+```
 
-  ```bash
-  pi install npm:pi-deepinfra
-  ```
+or from source:
 
-- **git** (latest source):
-
-  ```bash
-  pi install git:github.com/puetsua/pi-deepinfra
-  ```
+```bash
+pi install git:github.com/cad0p/pi-deepinfra
+```
 
 1. Authenticate — either:
 
@@ -44,11 +44,11 @@ Requires [pi](https://github.com/earendil-works/pi).
 |---|---|
 | **Model catalog** | Registered instantly with a curated fallback list — startup never blocks on the network. The live catalog from `https://api.deepinfra.com/v1/openai/models` is fetched lazily at session start, swapped in over the fallback, and cached in `~/.pi/agent/cache/deepinfra-models.json` so later startups register the full catalog instantly (needed by clients that select a model right after launching pi, e.g. RPC mode) — **no API key required** (the catalog is public), so models are ready the moment a key is added. All `chat`-tagged models are registered (embeddings/image/TTS/STT excluded). |
 | **Streaming** | `openai-completions` API; SSE streaming with `reasoning_content` thinking deltas on reasoning models. |
-| **Thinking levels** | `reasoning_effort` maps 1:1 to pi thinking levels (`minimal`…`max`); `off` → `none`. E.g. `Ctrl+P` or `/model` + thinking level cycling works as usual. |
+| **Thinking levels** | The full `reasoning_effort` vocabulary: `off → none`, and `minimal`/`low`/`medium`/`high`/`xhigh`/`max` pass through by name. DeepInfra validates one global enum for every chat model (an invalid value returns HTTP 422 listing `none, minimal, low, medium, high, xhigh, max`), so `Ctrl+P` / `/model` cycling offers every level including `max`. |
 | **Vision** | `vision`-tagged models accept image input. |
 | **Tool calling** | Standard OpenAI `tools`/`tool_choice`. |
-| **Cost tracking** | Input/output/cache prices from the catalog ($ per 1M tokens, `cache_read_tokens` when DeepInfra publishes it). Override per model in `~/.pi/agent/models.json` if needed. |
-| **Footer statusline** | While a DeepInfra model is active: `↑12.3k ↓4.5k · $0.042` for session tokens+cost, plus `M: $12.34 / $50.00` for DeepInfra monthly usage when a spending limit is configured (via `/payment/config`), or `M: $12.34` otherwise. The session figures count only assistant usage attributed to the DeepInfra provider, so switching to another model/provider mid-session never mixes their tokens/cost into these totals. Refresh with `/deepinfra-billing`. |
+| **Cost tracking** | Input/output/cache prices from the catalog ($ per 1M tokens, `cache_read_tokens` when DeepInfra publishes it). Override per model in `~/.pi/agent/models.json` if needed. Session tokens + cost are rendered by pi's own footer. |
+| **Footer statusline** | While a DeepInfra model is active: `M: $12.34 / $50.00` — the DeepInfra monthly spend and the configured spending limit (via `/payment/config`), or `M: $12.34` when no limit is set. Nothing else: pi's footer already shows session tokens and cost, so this extension does not repeat them. Refresh with `/deepinfra-billing`; disable with `PI_DEEPINFRA_FOOTER=off`. |
 
 ## Commands
 
@@ -58,21 +58,54 @@ Requires [pi](https://github.com/earendil-works/pi).
 ## Configuration
 
 - **API key**: `/login deepinfra`, `DEEPINFRA_API_KEY`, or the auth.json credential.
-- **Per-model overrides** (prices, context, max tokens): standard pi
-  `~/.pi/agent/models.json` mechanism, e.g.:
+- **Footer**: `PI_DEEPINFRA_FOOTER=off` hides the statusline entirely.
+- **Per-model overrides** (prices, context, max tokens, thinking levels): standard
+  pi `~/.pi/agent/models.json` mechanism, e.g.:
 
   ```json
   {
-    "deepinfra": {
-      "models": [
-        {
-          "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
-          "cost": { "input": 0.09, "output": 0.18, "cacheRead": 0.018, "cacheWrite": 0 }
+    "providers": {
+      "deepinfra": {
+        "modelOverrides": {
+          "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+            "contextWindow": 400000
+          }
         }
-      ]
+      }
     }
   }
   ```
 
-  Note: `models.json` `deepinfra` entries replace the extension's models for that
+  Note: `models.json` `models` entries replace the extension's models for that
   provider — set a full `models` list there if you use it.
+
+## Differences from upstream
+
+1. **Thinking levels cover the whole enum.** Upstream maps only `off → none`, so
+   pi's `getSupportedThinkingLevels()` stops at `high` (pi only offers
+   `xhigh`/`max` when `thinkingLevelMap` names them explicitly) and a `max`
+   request is silently clamped to `high`. Verified against the live API: the
+   validator accepts `none/minimal/low/medium/high/xhigh/max` for every chat
+   model, so the map is complete.
+2. **The footer no longer duplicates pi's.** Upstream renders
+   `↑in ↓out · $cost · M: $spent`; pi's own footer already renders
+   `↑in ↓out $cost`, so the fork keeps only the monthly figure and drops the
+   per-message recomputation.
+3. **`PI_DEEPINFRA_FOOTER=off`** to hide the statusline (upstream has no switch).
+
+Everything else — catalog discovery, caching, auth, compat flags — is upstream's.
+
+## Development
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check   # tsc --noEmit (thinking.ts + its test; pi-importing files are excluded)
+pnpm test    # node --test (offline)
+```
+
+See [docs/verification.md](docs/verification.md) for the CI gates and live-proof
+checklists.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Original work © 2026 puetsua.

@@ -10,8 +10,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import type { Model, ModelThinkingLevel, ThinkingLevelMap } from "@earendil-works/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+
+// Complete reasoning_effort map — see ./thinking.ts (xhigh/max are opt-in in
+// pi, so an incomplete map silently caps the selector at "high").
+import { THINKING_LEVEL_MAP } from "./thinking";
 
 export const PROVIDER_ID = "deepinfra";
 export const BASE_URL = "https://api.deepinfra.com/v1/openai";
@@ -47,13 +51,6 @@ export function displayName(id: string): string {
 	const tail = id.split("/").pop() ?? id;
 	return tail;
 }
-
-/**
- * Thinking level mapping. DeepInfra's `reasoning_effort` vocabulary is
- * identical to pi's (`minimal..max`) except "off" — DeepInfra uses "none".
- * Values pass through by name, so only "off" needs a mapping.
- */
-export const THINKING_LEVEL_MAP: ThinkingLevelMap = { off: "none" };
 
 /**
  * Compatibility flags required by DeepInfra's OpenAI-compatible API
