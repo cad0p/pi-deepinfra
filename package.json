@@ -21,6 +21,7 @@
     "index.ts",
     "models.ts",
     "thinking.ts",
+    "overrides.ts",
     "pricing.ts",
     "tiers.ts",
     "README.md",

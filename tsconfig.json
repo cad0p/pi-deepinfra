@@ -18,6 +18,8 @@
     "thinking.test.ts",
     "pricing.ts",
     "pricing.test.ts",
+    "overrides.ts",
+    "overrides.test.ts",
     "tiers.ts",
     "tiers.test.ts",
     "packaging.test.ts"
