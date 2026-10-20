@@ -47,12 +47,14 @@ pi install git:github.com/cad0p/pi-deepinfra-provider
 | **Thinking levels** | The full `reasoning_effort` vocabulary: `off → none`, and `minimal`/`low`/`medium`/`high`/`xhigh`/`max` pass through by name. DeepInfra validates one global enum for every chat model (an invalid value returns HTTP 422 listing `none, minimal, low, medium, high, xhigh, max`), so `Ctrl+P` / `/model` cycling offers every level including `max`. |
 | **Vision** | `vision`-tagged models accept image input. |
 | **Tool calling** | Standard OpenAI `tools`/`tool_choice`. |
-| **Cost tracking** | Input/output/cache prices from the catalog ($ per 1M tokens, `cache_read_tokens` when DeepInfra publishes it). Override per model in `~/.pi/agent/models.json` if needed. Session tokens + cost are rendered by pi's own footer. |
+| **Cost tracking** | The rates published to pi are what DeepInfra actually bills: catalog **list** prices x the published `discount` x the service-tier multiplier ($ per 1M tokens). Upstream maps list prices only, which overstates the footer by ~2x (or ~2.55x on flex). Verified against the API's `usage.estimated_cost`. |
+| **Service tiers** | `PI_DEEPINFRA_SERVICE_TIER` selects the tier for every request: `flex` (0.8x base, non-production), `default` (1x), `priority` (1.5x, scheduled ahead of standard). Sent as the `service_tier` body parameter — DeepInfra echoes it back, and unknown values degrade to `default` exactly like the API does. Unset = `default` (nothing extra sent). |
 | **No statusline** | The fork adds no footer of its own: pi already renders session tokens + cost, and the DeepInfra monthly spend lives on the dashboard. The extension makes no `/payment` calls. |
 
 ## Configuration
 
 - **API key**: `/login deepinfra`, `DEEPINFRA_API_KEY`, or the auth.json credential.
+- **Service tier**: `PI_DEEPINFRA_SERVICE_TIER=flex` (or `priority`/`default`). Read at extension load — restart pi after changing it. It drives both the `service_tier` request parameter and the rates pi uses for cost, so the footer stays truthful.
 - **Per-model overrides** (prices, context, max tokens, thinking levels): standard
   pi `~/.pi/agent/models.json` mechanism, e.g.:
 
@@ -86,6 +88,8 @@ pi install git:github.com/cad0p/pi-deepinfra-provider
    the DeepInfra dashboard. The fork drops the statusline, the
    `/deepinfra-billing` command, the per-message recomputation, and the
    `/payment/*` calls with it.
+
+3. **Real costs.** Upstream maps catalog list prices straight into `model.cost`, ignoring the catalog's `discount` field, so pi's footer shows ~2x the real charge; the fork folds in the discount and the service tier (see `pricing.ts`).
 
 Everything else — catalog discovery, caching, auth, compat flags — is upstream's.
 

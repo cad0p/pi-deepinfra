@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
+import { effectiveRates, parseServiceTier, SERVICE_TIER_ENV } from "./pricing";
 // Complete reasoning_effort map — see ./thinking.ts (xhigh/max are opt-in in
 // pi, so an incomplete map silently caps the selector at "high").
 import { THINKING_LEVEL_MAP } from "./thinking";
@@ -36,6 +37,8 @@ export interface DeepInfraCatalogModel {
 			output_tokens?: number;
 			cache_read_tokens?: number;
 		};
+		/** Fraction off list price that DeepInfra currently bills (0.51 = 51% off). */
+		discount?: number | null;
 		tags?: string[];
 	};
 }
@@ -44,7 +47,16 @@ export interface DeepInfraCatalog {
 	data: DeepInfraCatalogModel[];
 }
 
-const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+/**
+ * Service tier for every request this process sends (`PI_DEEPINFRA_SERVICE_TIER`).
+ * Read once at load: it selects both the rates published to pi (so the footer
+ * matches the invoice) and the `service_tier` body param. See ./pricing.ts.
+ */
+const SERVICE_TIER = parseServiceTier(process.env[SERVICE_TIER_ENV]);
+
+/** `service_tier` body param, omitted for the default tier. */
+const SAMPLING_PARAMS =
+	SERVICE_TIER === "default" ? undefined : { samplingParams: { service_tier: SERVICE_TIER } };
 
 /** "deepseek-ai/DeepSeek-V4-Flash-0731" -> "DeepSeek-V4-Flash-0731" */
 export function displayName(id: string): string {
@@ -72,10 +84,18 @@ export function mapCatalogModel(raw: DeepInfraCatalogModel): Model<"openai-compl
 	const tags = metadata.tags ?? [];
 	const pricing = metadata.pricing ?? {};
 	const reasoning = tags.includes("reasoning");
-	const inputPrice = round4(pricing.input_tokens ?? 0);
-	const outputPrice = round4(pricing.output_tokens ?? 0);
-	const cacheRead = round4(pricing.cache_read_tokens ?? inputPrice);
 	const hasVision = tags.includes("vision") || tags.includes("vlm");
+	// Catalog prices are LIST prices: fold in the published discount and the
+	// service tier so model.cost is what DeepInfra actually bills.
+	const cost = effectiveRates(
+		{
+			input: pricing.input_tokens ?? 0,
+			output: pricing.output_tokens ?? 0,
+			cacheRead: pricing.cache_read_tokens ?? pricing.input_tokens ?? 0,
+		},
+		metadata.discount,
+		SERVICE_TIER,
+	);
 
 	return {
 		id: raw.id,
@@ -86,10 +106,11 @@ export function mapCatalogModel(raw: DeepInfraCatalogModel): Model<"openai-compl
 		reasoning,
 		thinkingLevelMap: reasoning ? THINKING_LEVEL_MAP : undefined,
 		input: hasVision ? ["text", "image"] : ["text"],
-		cost: { input: inputPrice, output: outputPrice, cacheRead, cacheWrite: 0 },
+		cost,
 		contextWindow: metadata.context_length ?? 128_000,
 		maxTokens: metadata.max_tokens ?? 4096,
 		compat: DEEPINFRA_COMPAT,
+		...SAMPLING_PARAMS,
 	};
 }
 
@@ -158,7 +179,8 @@ function writeCatalogCache(data: DeepInfraCatalogModel[]): void {
 /**
  * Curated fallback list used before the first successful catalog fetch (no
  * cache yet) and when the catalog is unreachable (offline, DNS, etc.).
- * Values captured from the live catalog.
+ * List prices captured from the live catalog — no discount is known offline, so
+ * only the service-tier multiplier is applied (see ./pricing.ts).
  */
 export function fallbackModels(): Model<"openai-completions">[] {
 	const entries: Array<[string, number, number, number, number, boolean, boolean]> = [
@@ -184,14 +206,10 @@ export function fallbackModels(): Model<"openai-completions">[] {
 		reasoning,
 		thinkingLevelMap: reasoning ? THINKING_LEVEL_MAP : undefined,
 		input: vision ? (["text", "image"] as const) : (["text"] as const),
-		cost: {
-			input,
-			output,
-			cacheRead: input,
-			cacheWrite: 0,
-		},
+		cost: effectiveRates({ input, output, cacheRead: input }, undefined, SERVICE_TIER),
 		contextWindow,
 		maxTokens,
 		compat: DEEPINFRA_COMPAT,
+		...SAMPLING_PARAMS,
 	}));
 }
