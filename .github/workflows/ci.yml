@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'release/*']
+  pull_request:
+    branches: [main, 'release/*']
+
+permissions:
+  contents: read
+
+jobs:
+  install-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # pnpm 11 — the same install path pi uses for this extension, so an
+      # unapproved build script (ERR_PNPM_IGNORED_BUILDS) fails CI instead of
+      # breaking `pi update` locally.
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.19
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.19
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # thinking.ts + its test only: the pi-importing modules resolve through
+      # pi's extension loader at runtime and this package carries no pi
+      # dev-dependency by design (see tsconfig.json).
+      - name: Typecheck
+        run: pnpm check
+      - name: Test
+        run: pnpm test
