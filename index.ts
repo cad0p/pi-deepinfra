@@ -1,5 +1,5 @@
 /**
- * pi-deepinfra — DeepInfra provider for pi.
+ * @cad0p/pi-deepinfra-provider — DeepInfra provider for pi (fork of pi-deepinfra).
  *
  * Registers the `deepinfra` provider with:
  * - Dynamic model discovery from the public catalog (https://api.deepinfra.com/v1/openai/models),
@@ -89,7 +89,7 @@ export default function (pi: ExtensionAPI): void {
 			models.splice(0, models.length, ...live);
 		} catch (error) {
 			console.warn(
-				`[pi-deepinfra] catalog fetch failed (${error instanceof Error ? error.message : String(error)}); keeping ${models.length} cached/fallback models`,
+				`[pi-deepinfra-provider] catalog fetch failed (${error instanceof Error ? error.message : String(error)}); keeping ${models.length} cached/fallback models`,
 			);
 		}
 	};
