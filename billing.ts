@@ -62,11 +62,14 @@ export function createUsageFooter(_pi: ExtensionAPI, providerId: string): UsageF
 	const isActiveProvider = (ctx: ExtensionContext) => ctx.model?.provider === providerId;
 
 	async function fetchMonthly(ctx: ExtensionContext): Promise<void> {
-		const auth = await ctx.modelRegistry.getProviderAuth(providerId);
-		const apiKey = auth?.auth.apiKey;
-		if (!apiKey) return; // unconfigured — leave monthly hidden
-
+		// Everything (credential lookup included) sits inside the try: the
+		// footer is decorative, so no failure may reject the caller's event
+		// handler or surface as an unhandled rejection.
 		try {
+			const auth = await ctx.modelRegistry.getProviderAuth(providerId);
+			const apiKey = auth?.auth.apiKey;
+			if (!apiKey) return; // unconfigured — leave monthly hidden
+
 			const headers = { Authorization: `Bearer ${apiKey}` };
 			const [usageRes, configRes] = await Promise.all([
 				fetch(`${BILLING_BASE}/payment/usage?from=current`, {
