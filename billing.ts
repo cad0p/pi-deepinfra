@@ -58,13 +58,17 @@ export function createUsageFooter(_pi: ExtensionAPI, providerId: string): UsageF
 	let monthly: MonthlyUsage | null = null;
 	let monthlyInFlight: Promise<void> | null = null;
 	let enabled = true;
+	/** Bumped on shutdown so a request that resolves late cannot repopulate. */
+	let generation = 0;
 
 	const isActiveProvider = (ctx: ExtensionContext) => ctx.model?.provider === providerId;
 
 	async function fetchMonthly(ctx: ExtensionContext): Promise<void> {
 		// Everything (credential lookup included) sits inside the try: the
 		// footer is decorative, so no failure may reject the caller's event
-		// handler or surface as an unhandled rejection.
+		// handler or surface as an unhandled rejection. A failure keeps the
+		// previous figure rather than blanking the statusline.
+		const startedIn = generation;
 		try {
 			const auth = await ctx.modelRegistry.getProviderAuth(providerId);
 			const apiKey = auth?.auth.apiKey;
@@ -83,6 +87,7 @@ export function createUsageFooter(_pi: ExtensionAPI, providerId: string): UsageF
 			const config = (await configRes.json()) as DeepInfraConfigResponse;
 			const cents = usage.months?.[0]?.total_cost;
 			if (typeof cents !== "number") return;
+			if (startedIn !== generation) return; // session shut down meanwhile
 			const limit = config.limit;
 			monthly = {
 				spentUsd: cents / 100,
@@ -139,10 +144,12 @@ export function createUsageFooter(_pi: ExtensionAPI, providerId: string): UsageF
 			render(ctx);
 		},
 		onShutdown() {
+			generation++;
 			monthly = null;
 		},
 		async refreshMonthly(ctx) {
-			monthly = null; // force refetch
+			// Deliberately NOT clearing `monthly` first: a failed refetch must
+			// leave the last known figure on screen instead of blanking it.
 			await refresh(ctx);
 			render(ctx);
 		},

@@ -24,7 +24,8 @@
     "billing.ts",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/verification.md"
   ],
   "repository": {
     "type": "git",

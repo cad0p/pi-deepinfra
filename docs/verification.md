@@ -19,6 +19,11 @@ needed it.
 
 ## 2. CI gates
 
+The workflows land in the pipeline PR, not in the bootstrap PR: the validators
+read `origin/main:package.json`, so a repository whose first PR carries both the
+manifest and the validators can never turn the first check green. Until the
+pipeline PR merges, only the offline gates in §3 run.
+
 | Check | Workflow | What it proves |
 |---|---|---|
 | `install-check` | `ci.yml` | `pnpm install --frozen-lockfile` under pnpm 11 — an unapproved build script (`ERR_PNPM_IGNORED_BUILDS`) fails CI instead of breaking `pi update` locally. |
