@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Rename the npm package to @cad0p/pi-deepinfra-provider (closes #9)
+- Drop the billing footer and /deepinfra-billing (closes #7)
 
 
 ## [0.1.5] - 2026-10-20
