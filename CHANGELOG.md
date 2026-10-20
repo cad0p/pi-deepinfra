@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [calver-released]
+
+<!-- USER-EDITABLE SECTION START -->
+<!-- Add your curated release notes here. -->
+<!-- USER-EDITABLE SECTION END -->
+
+### ⚙️ Miscellaneous Tasks
+
+- Rename the npm package to @cad0p/pi-deepinfra-provider (closes #9)
+
+
 ## [0.1.5] - 2026-10-20
 
 <!-- USER-EDITABLE SECTION START -->
