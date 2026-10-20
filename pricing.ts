@@ -33,23 +33,6 @@ export const SERVICE_TIERS = {
 
 export type ServiceTier = keyof typeof SERVICE_TIERS;
 
-export const DEFAULT_SERVICE_TIER: ServiceTier = "default";
-
-/** Env var selecting the tier for every request the extension sends. */
-export const SERVICE_TIER_ENV = "PI_DEEPINFRA_SERVICE_TIER";
-
-/**
- * Parse a tier from a raw env value. Unknown/empty values fall back to
- * `default` — the same thing DeepInfra does with an unrecognised tier (it
- * answers 200 with `service_tier: "default"`), so a typo degrades to standard
- * pricing instead of failing every request.
- */
-export function parseServiceTier(raw: string | undefined): ServiceTier {
-	const value = raw?.trim().toLowerCase();
-	if (value === "flex" || value === "priority") return value;
-	return DEFAULT_SERVICE_TIER;
-}
-
 export interface ListRates {
 	input: number;
 	output: number;

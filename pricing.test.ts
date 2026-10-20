@@ -1,29 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-	DEFAULT_SERVICE_TIER,
-	effectiveRates,
-	parseServiceTier,
-	SERVICE_TIERS,
-} from "./pricing.ts";
+import { effectiveRates, SERVICE_TIERS } from "./pricing.ts";
 
 test("tiers carry DeepInfra's published multipliers", () => {
 	assert.deepEqual(SERVICE_TIERS, { default: 1, flex: 0.8, priority: 1.5 });
-	assert.equal(DEFAULT_SERVICE_TIER, "default");
-});
-
-test("parseServiceTier accepts the real tiers, case/space tolerant", () => {
-	assert.equal(parseServiceTier("flex"), "flex");
-	assert.equal(parseServiceTier("  FLEX "), "flex");
-	assert.equal(parseServiceTier("priority"), "priority");
-	assert.equal(parseServiceTier("default"), "default");
-});
-
-test("parseServiceTier degrades to default instead of failing (mirrors the API)", () => {
-	for (const raw of [undefined, "", "  ", "auto", "bogus", "0.8"]) {
-		assert.equal(parseServiceTier(raw), "default", `${String(raw)} should fall back`);
-	}
 });
 
 test("discount is applied (list 0.20/0.60/0.006 with 51% off -> 0.098/0.294/0.0029)", () => {
@@ -57,7 +38,7 @@ test("no discount means list price, per tier", () => {
 		cacheRead: 0.006,
 		cacheWrite: 0,
 	});
-	// 0, out-of-range and non-finite discounts are all "no discount", never a
+	// 0, out-of-range and negative discounts are all "no discount", never a
 	// free model or a negative rate.
 	for (const bad of [0, 1, 1.5, -0.2]) {
 		const rates = effectiveRates({ input: 0.2, output: 0.6, cacheRead: 0.006 }, bad, "default");

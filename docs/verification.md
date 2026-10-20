@@ -56,7 +56,7 @@ and this package carries no pi dev-dependency (same policy as
 | Provider/compat flags | One real streaming request through the extension (`pi -e . --provider deepinfra --model <id>`) with the target model; confirm text + `reasoning_content` deltas arrive. |
 | Footer / billing | Real session on a DeepInfra model: **no** DeepInfra statusline appears (pi's own footer is the only one), and no request is made to `api.deepinfra.com/payment/*`. |
 | Catalog / startup | Start pi with the network blocked (or a stale cache) and confirm the provider still registers models and a session runs. |
-| Service tier / cost | With `PI_DEEPINFRA_SERVICE_TIER=flex`, resolve a catalog model and check it carries `samplingParams.service_tier = "flex"` and flex rates (e.g. `deepseek-ai/DeepSeek-V4.1-Flash-1017` → 0.0784/0.2352/0.0024 per 1M). Then run one real request and compare pi's recorded cost with the API's `usage.estimated_cost` for the same tokens — they must agree, which is what pins the discount and tier maths. |
+| Service tier / cost | Resolve a catalog entry and check the fan-out: `<id>` (default, 1x, no `samplingParams`), `<id>-flex` (0.8x, `samplingParams.service_tier = "flex"`) and `<id>-priority` (1.5x). For `deepseek-ai/DeepSeek-V4.1-Flash-1017` that is 0.098/0.294/0.0029, 0.0784/0.2352/0.0024 and 0.147/0.441/0.0044 per 1M. Then run one real request on the `-flex` id and compare pi's recorded cost with the API's `usage.estimated_cost` for the same tokens — they must agree, which is what pins the discount and tier maths. |
 
 ## 5. What "green" means
 
