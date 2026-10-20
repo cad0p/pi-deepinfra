@@ -48,13 +48,18 @@ pi install git:github.com/cad0p/pi-deepinfra-provider
 | **Vision** | `vision`-tagged models accept image input. |
 | **Tool calling** | Standard OpenAI `tools`/`tool_choice`. |
 | **Cost tracking** | The rates published to pi are what DeepInfra actually bills: catalog **list** prices x the published `discount` x the service-tier multiplier ($ per 1M tokens). Upstream maps list prices only, which overstates the footer by ~2x (or ~2.55x on flex). Verified against the API's `usage.estimated_cost`. |
-| **Service tiers** | `PI_DEEPINFRA_SERVICE_TIER` selects the tier for every request: `flex` (0.8x base, non-production), `default` (1x), `priority` (1.5x, scheduled ahead of standard). Sent as the `service_tier` body parameter — DeepInfra echoes it back, and unknown values degrade to `default` exactly like the API does. Unset = `default` (nothing extra sent). |
+| **Service tiers as models** | Every catalog model gets three entries, so you pick the tier by picking a model (works with `/model`, scoped models, subagents, fallback chains — and lets two tiers of the same model coexist): `deepinfra/<id>` = default 1x, `deepinfra/<id>-flex` = flex 0.8x (non-production), `deepinfra/<id>-priority` = priority 1.5x. The tier is sent as the `service_tier` body parameter and each entry carries its own tier-adjusted rates, so pi's cost is the billed cost. |
 | **No statusline** | The fork adds no footer of its own: pi already renders session tokens + cost, and the DeepInfra monthly spend lives on the dashboard. The extension makes no `/payment` calls. |
 
 ## Configuration
 
 - **API key**: `/login deepinfra`, `DEEPINFRA_API_KEY`, or the auth.json credential.
-- **Service tier**: `PI_DEEPINFRA_SERVICE_TIER=flex` (or `priority`/`default`). Read at extension load — restart pi after changing it. It drives both the `service_tier` request parameter and the rates pi uses for cost, so the footer stays truthful.
+- **Service tier**: pick the model id — `deepinfra/<id>-flex` or `deepinfra/<id>-priority`; the bare id is the default tier. No env var, no restart, and no state: the id says what you pay.
+
+  ```
+  /model deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017-flex
+  pi --model deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017-priority "…"
+  ```
 - **Per-model overrides** (prices, context, max tokens, thinking levels): standard
   pi `~/.pi/agent/models.json` mechanism, e.g.:
 
@@ -90,6 +95,7 @@ pi install git:github.com/cad0p/pi-deepinfra-provider
    `/payment/*` calls with it.
 
 3. **Real costs.** Upstream maps catalog list prices straight into `model.cost`, ignoring the catalog's `discount` field, so pi's footer shows ~2x the real charge; the fork folds in the discount and the service tier (see `pricing.ts`).
+4. **Service tiers are models.** Upstream never sends `service_tier`, so every request runs standard. The fork registers `<id>`, `<id>-flex` and `<id>-priority` (see `tiers.ts`), each with its own `samplingParams` and rates.
 
 Everything else — catalog discovery, caching, auth, compat flags — is upstream's.
 

@@ -13,7 +13,8 @@ import { dirname, join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-import { effectiveRates, parseServiceTier, SERVICE_TIER_ENV } from "./pricing";
+import { effectiveRates, type ServiceTier } from "./pricing";
+import { tierModelId, tierModelName, tiersFor, TIERS } from "./tiers";
 // Complete reasoning_effort map — see ./thinking.ts (xhigh/max are opt-in in
 // pi, so an incomplete map silently caps the selector at "high").
 import { THINKING_LEVEL_MAP } from "./thinking";
@@ -48,16 +49,18 @@ export interface DeepInfraCatalog {
 }
 
 /**
- * Service tier for every request this process sends (`PI_DEEPINFRA_SERVICE_TIER`).
- * Read once at load: it selects both the rates published to pi (so the footer
- * matches the invoice) and the `service_tier` body param. See ./pricing.ts.
+ * One model entry per service tier, so the tier is chosen by picking a model
+ * (works with `/model`, scoped models, subagents and fallback chains) instead
+ * of being ambient process state:
+ *
+ *   `deepinfra/<id>`            default tier, 1x base price
+ *   `deepinfra/<id>-flex`       flex tier, 0.8x base price
+ *   `deepinfra/<id>-priority`   priority tier, 1.5x base price
+ *
+ * pi computes cost from `model.cost` and ignores DeepInfra's per-response
+ * `usage.estimated_cost`, so each entry has to carry its own tier-adjusted
+ * rates (see ./pricing.ts).
  */
-const SERVICE_TIER = parseServiceTier(process.env[SERVICE_TIER_ENV]);
-
-/** `service_tier` body param, omitted for the default tier. */
-const SAMPLING_PARAMS =
-	SERVICE_TIER === "default" ? undefined : { samplingParams: { service_tier: SERVICE_TIER } };
-
 /** "deepseek-ai/DeepSeek-V4-Flash-0731" -> "DeepSeek-V4-Flash-0731" */
 export function displayName(id: string): string {
 	const tail = id.split("/").pop() ?? id;
@@ -79,14 +82,19 @@ export const DEEPINFRA_COMPAT = {
 	supportsReasoningEffort: true,
 } as const;
 
-export function mapCatalogModel(raw: DeepInfraCatalogModel): Model<"openai-completions"> {
+/** One catalog entry -> one model entry for a given service tier. */
+export function mapCatalogModelTier(
+	raw: DeepInfraCatalogModel,
+	tier: ServiceTier,
+): Model<"openai-completions"> {
 	const metadata = raw.metadata ?? {};
 	const tags = metadata.tags ?? [];
 	const pricing = metadata.pricing ?? {};
 	const reasoning = tags.includes("reasoning");
 	const hasVision = tags.includes("vision") || tags.includes("vlm");
+	const baseName = raw.name ?? displayName(raw.id);
 	// Catalog prices are LIST prices: fold in the published discount and the
-	// service tier so model.cost is what DeepInfra actually bills.
+	// tier multiplier so model.cost is what DeepInfra actually bills.
 	const cost = effectiveRates(
 		{
 			input: pricing.input_tokens ?? 0,
@@ -94,12 +102,12 @@ export function mapCatalogModel(raw: DeepInfraCatalogModel): Model<"openai-compl
 			cacheRead: pricing.cache_read_tokens ?? pricing.input_tokens ?? 0,
 		},
 		metadata.discount,
-		SERVICE_TIER,
+		tier,
 	);
 
 	return {
-		id: raw.id,
-		name: raw.name ?? displayName(raw.id),
+		id: tierModelId(raw.id, tier),
+		name: tierModelName(baseName, tier),
 		api: "openai-completions",
 		provider: PROVIDER_ID,
 		baseUrl: BASE_URL,
@@ -110,8 +118,14 @@ export function mapCatalogModel(raw: DeepInfraCatalogModel): Model<"openai-compl
 		contextWindow: metadata.context_length ?? 128_000,
 		maxTokens: metadata.max_tokens ?? 4096,
 		compat: DEEPINFRA_COMPAT,
-		...SAMPLING_PARAMS,
+		// The tier travels with the model entry; default sends nothing.
+		samplingParams: tier === "default" ? undefined : { service_tier: tier },
 	};
+}
+
+/** One catalog entry -> its default/flex/priority entries. */
+export function mapCatalogModel(raw: DeepInfraCatalogModel): Model<"openai-completions">[] {
+	return tiersFor(raw.id).map((tier) => mapCatalogModelTier(raw, tier));
 }
 
 /**
@@ -132,7 +146,7 @@ export async function fetchDeepInfraModels(signal?: AbortSignal): Promise<Model<
 	const catalog = (await response.json()) as DeepInfraCatalog;
 	const chat = catalog.data.filter((m) => m.metadata?.tags?.includes(CHAT_TAG));
 	writeCatalogCache(chat);
-	return chat.map(mapCatalogModel);
+	return chat.flatMap(mapCatalogModel);
 }
 
 /**
@@ -156,7 +170,7 @@ export function readCachedModels(): Model<"openai-completions">[] | undefined {
 	try {
 		const cache = JSON.parse(readFileSync(CATALOG_CACHE_PATH, "utf8")) as CatalogCacheFile;
 		if (!Array.isArray(cache.data) || cache.data.length === 0) return undefined;
-		return cache.data.map(mapCatalogModel);
+		return cache.data.flatMap(mapCatalogModel);
 	} catch {
 		return undefined;
 	}
@@ -197,19 +211,21 @@ export function fallbackModels(): Model<"openai-completions">[] {
 		["google/gemini-3.1-pro", 1_000_000, 1_000_000, 2.0, 12.0, true, true],
 	];
 
-	return entries.map(([id, contextWindow, maxTokens, input, output, reasoning, vision]) => ({
-		id,
-		name: displayName(id),
-		api: "openai-completions",
-		provider: PROVIDER_ID,
-		baseUrl: BASE_URL,
-		reasoning,
-		thinkingLevelMap: reasoning ? THINKING_LEVEL_MAP : undefined,
-		input: vision ? (["text", "image"] as const) : (["text"] as const),
-		cost: effectiveRates({ input, output, cacheRead: input }, undefined, SERVICE_TIER),
-		contextWindow,
-		maxTokens,
-		compat: DEEPINFRA_COMPAT,
-		...SAMPLING_PARAMS,
-	}));
+	return entries.flatMap(([id, contextWindow, maxTokens, input, output, reasoning, vision]) =>
+		TIERS.map((tier) => ({
+			id: tierModelId(id, tier),
+			name: tierModelName(displayName(id), tier),
+			api: "openai-completions" as const,
+			provider: PROVIDER_ID,
+			baseUrl: BASE_URL,
+			reasoning,
+			thinkingLevelMap: reasoning ? THINKING_LEVEL_MAP : undefined,
+			input: vision ? (["text", "image"] as const) : (["text"] as const),
+			cost: effectiveRates({ input, output, cacheRead: input }, undefined, tier),
+			contextWindow,
+			maxTokens,
+			compat: DEEPINFRA_COMPAT,
+			samplingParams: tier === "default" ? undefined : { service_tier: tier },
+		})),
+	);
 }

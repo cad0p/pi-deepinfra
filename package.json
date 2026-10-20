@@ -22,6 +22,7 @@
     "models.ts",
     "thinking.ts",
     "pricing.ts",
+    "tiers.ts",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
