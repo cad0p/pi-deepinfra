@@ -1,23 +1,23 @@
 /**
- * DeepInfra footer statusline: session token usage + cost, and DeepInfra
- * monthly usage (with the user's configured spending limit, if any).
+ * DeepInfra footer statusline: MONTHLY DeepInfra spend only.
+ *
+ * pi's own footer already renders session tokens + cost (`↑in ↓out $cost`, see
+ * pi's interactive footer), so this extension does not repeat them — it only
+ * adds the figure pi cannot know: the account's DeepInfra spend for the current
+ * month, plus the configured spending limit when one is set.
  *
  * Data sources (all verified against the live API):
- * - Session usage: pi message/entry `usage` (input/output/cacheRead/cacheWrite
- *   tokens + cost in $), recomputed from session entries on every update. Only
- *   assistant messages attributed to THIS provider count, so switching to another
- *   model/provider mid-session never mixes their usage into our totals.
  * - Monthly spend: GET https://api.deepinfra.com/payment/usage?from=current
  *   -> months[0].total_cost (integer CENTS).
  * - Configured limit: GET https://api.deepinfra.com/payment/config
  *   -> { limit } (USD; negative = no limit).
+ *
+ * Set `PI_DEEPINFRA_FOOTER=off` to suppress the statusline entirely.
  */
 
-import type { Usage } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext, MessageEndEvent } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const BILLING_BASE = "https://api.deepinfra.com";
-const MONTHLY_TTL_MS = 60_000;
 
 interface DeepInfraUsageMonth {
 	period?: string;
@@ -35,40 +35,27 @@ interface DeepInfraConfigResponse {
 interface MonthlyUsage {
 	spentUsd: number;
 	limitUsd: number | null;
-	fetchedAt: number;
 }
 
-const sumUsage = (usage: Usage | undefined) =>
-	usage
-		? {
-				input: usage.input || 0,
-				output: usage.output || 0,
-				cacheRead: usage.cacheRead || 0,
-				cacheWrite: usage.cacheWrite || 0,
-				cost: usage.cost?.total || 0,
-			}
-		: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-
-function formatTokens(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-	return String(Math.round(n));
+/** `PI_DEEPINFRA_FOOTER=off` (or 0/false/no) disables the statusline. */
+export function footerEnabled(env: (name: string) => string | undefined): boolean {
+	const raw = env("PI_DEEPINFRA_FOOTER")?.trim().toLowerCase();
+	return !(raw === "off" || raw === "0" || raw === "false" || raw === "no");
 }
 
 export interface UsageFooter {
 	onSessionStart(ctx: ExtensionContext): Promise<void>;
-	onMessageEnd(event: MessageEndEvent, ctx: ExtensionContext): void;
-	onSessionCompact(ctx: ExtensionContext): void;
 	onModelSelect(ctx: ExtensionContext): void;
 	onShutdown(): void;
 	refreshMonthly(ctx: ExtensionContext): Promise<void>;
 	render(ctx: ExtensionContext): void;
 }
 
-export function createUsageFooter(pi: ExtensionAPI, providerId: string): UsageFooter {
+export function createUsageFooter(_pi: ExtensionAPI, providerId: string): UsageFooter {
 	const STATUS_KEY = "deepinfra";
 	let monthly: MonthlyUsage | null = null;
 	let monthlyInFlight: Promise<void> | null = null;
+	let enabled = true;
 
 	const isActiveProvider = (ctx: ExtensionContext) => ctx.model?.provider === providerId;
 
@@ -89,21 +76,20 @@ export function createUsageFooter(pi: ExtensionAPI, providerId: string): UsageFo
 			if (!usageRes.ok || !configRes.ok) return;
 			const usage = (await usageRes.json()) as DeepInfraUsageResponse;
 			const config = (await configRes.json()) as DeepInfraConfigResponse;
-			const current = usage.months?.[0];
-			if (!current) return;
-			const limit = typeof config.limit === "number" && config.limit > 0 ? config.limit : null;
+			const cents = usage.months?.[0]?.total_cost;
+			if (typeof cents !== "number") return;
+			const limit = config.limit;
 			monthly = {
-				spentUsd: (current.total_cost ?? 0) / 100, // API returns cents
-				limitUsd: limit,
-				fetchedAt: Date.now(),
+				spentUsd: cents / 100,
+				limitUsd: typeof limit === "number" && limit > 0 ? limit : null,
 			};
 		} catch {
-			// network/auth errors: keep last-known monthly value, never crash the session
+			// keep whatever we had; the footer is decorative, never fail the turn
 		}
 	}
 
-	async function refreshMonthly(ctx: ExtensionContext): Promise<void> {
-		if (monthly && Date.now() - monthly.fetchedAt < MONTHLY_TTL_MS) return;
+	/** Coalesced refetch: concurrent callers share one in-flight request. */
+	async function refresh(ctx: ExtensionContext): Promise<void> {
 		if (!monthlyInFlight) {
 			monthlyInFlight = fetchMonthly(ctx).finally(() => {
 				monthlyInFlight = null;
@@ -113,64 +99,35 @@ export function createUsageFooter(pi: ExtensionAPI, providerId: string): UsageFo
 	}
 
 	function render(ctx: ExtensionContext): void {
-		if (!isActiveProvider(ctx)) {
+		if (!enabled || !isActiveProvider(ctx) || !monthly) {
 			ctx.ui.setStatus(STATUS_KEY, undefined);
 			return;
 		}
-
-		const parts: string[] = [];
-
-		// Session tokens + cost, recomputed from session entries (survives /compact).
-		// Count only THIS provider's own assistant usage so that switching to another
-		// model/provider mid-session doesn't mix their tokens into our totals.
-		let t = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-		for (const entry of ctx.sessionManager.getEntries()) {
-			const msg = entry.message;
-			if (msg?.role !== "assistant") continue; // only assistant messages carry provider attribution
-			if (msg.provider !== providerId) continue; // DeepInfra-only usage
-			const u = sumUsage(msg.usage);
-			t.input += u.input;
-			t.output += u.output;
-			t.cacheRead += u.cacheRead;
-			t.cacheWrite += u.cacheWrite;
-			t.cost += u.cost;
-		}
-		if (t.input > 0 || t.output > 0) {
-			parts.push(`↑${formatTokens(t.input)} ↓${formatTokens(t.output)}`);
-		}
-		if (t.cost > 0) {
-			parts.push(`$${t.cost < 0.01 ? t.cost.toFixed(4) : t.cost.toFixed(3)}`);
-		}
-
-		// Monthly usage + configured limit
-		if (monthly) {
-			const spent = `$${monthly.spentUsd.toFixed(2)}`;
-			parts.push(
-				monthly.limitUsd != null
-					? `M: ${spent} / $${monthly.limitUsd.toFixed(2)}`
-					: `M: ${spent}`,
-			);
-		}
-
-		ctx.ui.setStatus(STATUS_KEY, parts.length > 0 ? parts.join(" · ") : undefined);
+		const spent = `$${monthly.spentUsd.toFixed(2)}`;
+		ctx.ui.setStatus(
+			STATUS_KEY,
+			monthly.limitUsd != null
+				? `M: ${spent} / $${monthly.limitUsd.toFixed(2)}`
+				: `M: ${spent}`,
+		);
 	}
 
 	return {
 		async onSessionStart(ctx) {
+			enabled = footerEnabled(ctx.env);
+			if (!enabled) {
+				render(ctx);
+				return;
+			}
 			if (isActiveProvider(ctx)) {
-				await refreshMonthly(ctx);
+				await refresh(ctx);
 			}
 			render(ctx);
 		},
-		onMessageEnd(_event, ctx) {
-			render(ctx);
-		},
-		onSessionCompact(ctx) {
-			render(ctx);
-		},
 		onModelSelect(ctx) {
+			if (!enabled) return;
 			if (isActiveProvider(ctx)) {
-				void refreshMonthly(ctx);
+				void refresh(ctx).then(() => render(ctx));
 			}
 			render(ctx);
 		},
@@ -179,7 +136,7 @@ export function createUsageFooter(pi: ExtensionAPI, providerId: string): UsageFo
 		},
 		async refreshMonthly(ctx) {
 			monthly = null; // force refetch
-			await refreshMonthly(ctx);
+			await refresh(ctx);
 			render(ctx);
 		},
 		render,

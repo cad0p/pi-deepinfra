@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  // NOTE: index.ts / models.ts / billing.ts are intentionally excluded — their
+  // pi imports (@earendil-works/pi-*) resolve at runtime via pi's extension
+  // loader, and this package carries no pi dev-dependency by design. Only the
+  // framework-free module (thinking.ts) and its test are typechecked here.
+  "include": ["thinking.ts", "thinking.test.ts"]
+}
