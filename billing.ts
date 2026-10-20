@@ -38,8 +38,10 @@ interface MonthlyUsage {
 }
 
 /** `PI_DEEPINFRA_FOOTER=off` (or 0/false/no) disables the statusline. */
-export function footerEnabled(env: (name: string) => string | undefined): boolean {
-	const raw = env("PI_DEEPINFRA_FOOTER")?.trim().toLowerCase();
+export function footerEnabled(
+	getEnv: (name: string) => string | undefined = (name) => process.env[name],
+): boolean {
+	const raw = getEnv("PI_DEEPINFRA_FOOTER")?.trim().toLowerCase();
 	return !(raw === "off" || raw === "0" || raw === "false" || raw === "no");
 }
 
@@ -114,7 +116,9 @@ export function createUsageFooter(_pi: ExtensionAPI, providerId: string): UsageF
 
 	return {
 		async onSessionStart(ctx) {
-			enabled = footerEnabled(ctx.env);
+			// pi's ExtensionContext has no env() accessor (only the auth-resolve
+			// context does), so read the process env directly.
+			enabled = footerEnabled();
 			if (!enabled) {
 				render(ctx);
 				return;
